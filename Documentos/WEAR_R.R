@@ -165,9 +165,12 @@ dim(covariable.test)
 dim(covariable.train)
 
 
-# Train a Random Forest model on the training data
+#forest
+
+
+# Train a Random Forest model using all features
 fit_forest_gold <- ranger(y ~ ., data = train)
-# Predict using the trained model on the test data
+# Predict using the trained model on the test set
 pred_forest_gold <- predict(fit_forest_gold, data = test)$predictions
 # Compute Mean Squared Error (MSE) for the forest model
 mse_forest_gold <- sum((pred_forest_gold - test$y)^2) / length(test$y)
@@ -180,16 +183,16 @@ se_forest_gold <- w_forest_gold_deviation / sqrt(length(test$y))
 
 # Compute the mean predictions across specialists
 mean.specialist = rowMeans(specialist) 
-# Create a dataset combining the mean specialist predictions and covariates
+# Create a dataset combining mean specialist predictions and covariates
 banco.specialist = data.frame(mean.specialist, covariable)
-# Split the specialist dataset into training, validation, and testing sets
+# Split the dataset into training, validation, and testing sets
 train.specialist <- banco.specialist[indicesTraining, ] 
-test.specialist <- banco.specialist[indicesTest,] 
+test.specialist <- banco.specialist[indicesTest, ] 
 validation.specialist <- banco.specialist[indicesValidation, ]
 
 # Train a Random Forest model using mean specialist predictions
 fit_forest_mean_specialist <- ranger(mean.specialist ~ ., data = train.specialist)
-# Predict using the trained model on the test data
+# Predict using the trained model on the test set
 pred_forest_mean_specialist <- predict(fit_forest_mean_specialist, data = test.specialist)$predictions
 
 # Compute MSE for the mean specialist model
@@ -205,9 +208,9 @@ se_forest_mean_specialist <- w_forest_mean_specialist_deviation / sqrt(length(te
 # Compute MSE for individual specialists using Random Forest
 specialist.mse.weight_forest <- NULL
 for (i in 1:count_specialist) {
-  specialistecialistatest <- specialist.test[,i]
-  specialistecialistatrain <- specialist.train[,i]
-  specialistecilistavalidation <- specialist.validation[,i]
+  specialistecialistatest <- specialist.test[, i]
+  specialistecialistatrain <- specialist.train[, i]
+  specialistecilistavalidation <- specialist.validation[, i]
   df.weight.test <- data.frame(specialistecialistatest, covariable.test)
   df.weight.train <- data.frame(specialistecialistatrain, covariable.train)
   df.weight.validation <- data.frame(specialistecilistavalidation, covariable.validation)
@@ -218,7 +221,7 @@ for (i in 1:count_specialist) {
   pred.specialist_forest <- predict(model_forest, data = df.weight.validation)$predictions
   
   # Compute MSE for each specialist
-  specialist.mse.weight_forest[i] <- sum((pred.specialist_forest - specialist.validation[,i])^2) / length(validation$y)
+  specialist.mse.weight_forest[i] <- sum((pred.specialist_forest - specialist.validation[, i])^2) / length(validation$y)
 }
 
 # Compute weighted specialist predictions
@@ -226,21 +229,28 @@ specialist.train.weight_forest <- specialist.train
 specialist.test.weight_forest <- specialist.test
 
 for (j in 1:count_specialist) {
-  specialist.train.weight_forest[,j] <- (specialist.train[,j] * (1 / specialist.mse.weight_forest[j]))
-  specialist.test.weight_forest[,j] <- (specialist.test[,j] * (1 / specialist.mse.weight_forest[j]))
+  specialist.train.weight_forest[, j] <- (specialist.train[, j] * (1 / specialist.mse.weight_forest[j]))
+  specialist.test.weight_forest[, j] <- (specialist.test[, j] * (1 / specialist.mse.weight_forest[j]))
 }
 
-# Compute final weighted specialist model
+# Store the weights of specialists in a matrix
 weight.specialist.forest <- t(specialist.mse.weight_forest)
 
 # Compute row sums for training and test specialist data
 specialist.train.weight.soma_forest <- rowSums(specialist.train.weight_forest)
 specialist.test.weight.soma_forest <- rowSums(specialist.test.weight_forest)
 
+# Convert MSE specialist weights to a data frame
+specialist.mse.weight_forest <- data.frame(specialist.mse.weight_forest)
+
+# Compute denominator for weighted specialist calculations
 denominador_forest <- colSums((1 / specialist.mse.weight_forest))
 
 mean.train.weight_notas_forest <- specialist.train.weight.soma_forest / denominador_forest
 mean.test.weight_notas_forest <- specialist.test.weight.soma_forest / denominador_forest
+
+df.mean.train.weight_notas_forest <- data.frame(mean.train.weight_notas_forest, covariable.train)
+df.mean.test.weight_notas_forest <- data.frame(mean.test.weight_notas_forest, covariable.test)
 
 # Create final dataset for model training
 fit10_mean.weight_forest <- ranger(mean.train.weight_notas_forest ~ ., data = df.mean.train.weight_notas_forest)
@@ -332,10 +342,15 @@ weight.specialist.tree = t(specialist.mse.weight_tree)
 specialist.train.weight.soma_tree = rowSums(specialist.train.weight_tree)
 specialist.test.weight.soma_tree = rowSums(specialist.test.weight_tree)
 
+specialist.mse.weight_tree = data.frame(specialist.mse.weight_tree) 
+
 denominador_tree = colSums((1 / specialist.mse.weight_tree))
 
 mean.train.weight_notas_tree <- specialist.train.weight.soma_tree / denominador_tree 
 mean.test.weight_notas_tree <- specialist.test.weight.soma_tree / denominador_tree
+
+df.mean.train.weight_notas_tree <- data.frame(mean.train.weight_notas_tree,covariable.train)
+df.mean.test.weight_notas_tree <- data.frame(mean.test.weight_notas_tree,covariable.test)
 
 # Create final dataset for model training
 fit10_mean.weight_tree <- rpart(mean.train.weight_notas_tree ~ ., data = df.mean.train.weight_notas_tree)
@@ -423,10 +438,15 @@ weight.specialist.lm = t(specialist.mse.weight_lm)
 specialist.train.weight.soma_lm = rowSums(specialist.train.weight_lm) 
 specialist.test.weight.soma_lm = rowSums(specialist.test.weight_lm)
 
+specialist.mse.weight_lm = data.frame(specialist.mse.weight_lm) 
+
 denominador_lm = colSums((1 / specialist.mse.weight_lm))
 
 mean.train.weight_notas_lm <- specialist.train.weight.soma_lm / denominador_lm
 mean.test.weight_notas_lm <- specialist.test.weight.soma_lm / denominador_lm
+
+df.mean.train.weight_notas_lm <-data.frame(mean.train.weight_notas_lm,covariable.train)
+df.mean.test.weight_notas_lm <-data.frame(mean.test.weight_notas_lm,covariable.test)
 
 # Create final dataset for model training
 fit10_mean.weight_lm <- lm(mean.train.weight_notas_lm ~ ., data = df.mean.train.weight_notas_lm)
@@ -544,6 +564,15 @@ denominador = colSums(1 / specialist.mse.weight)
 mean.train.weight_notas <- specialist.train.weight.soma / denominador
 mean.test.weight_notas <- specialist.test.weight.soma / denominador
 
+df.mean.train.weight_notas <-data.frame(mean.train.weight_notas,covariable.train)
+df.mean.test.weight_notas <-data.frame(mean.test.weight_notas,covariable.test) 
+x_train_weight_lasso =model.matrix(~.-1, df.mean.train.weight_notas[,-c(1)]) 
+y_train_weight_lasso= df.mean.train.weight_notas$mean.train.weight_notas
+x_test_weight_lasso = model.matrix(~.-1,df.mean.test.weight_notas[,-c(1)]) 
+y_test_weight_lasso = df.mean.test.weight_notas$mean.test.weight_notas 
+dim(x_train_weight_lasso)
+
+
 # Create final dataset for model training
 fit10_mean.weight_lasso <- cv.glmnet(x_train_weight_lasso, y_train_weight_lasso, alpha = 1)
 predict_mean_weight_lasso <- predict(fit10_mean.weight_lasso, s = fit10_mean.weight_lasso$lambda.min, newx = x_test_weight_lasso)
@@ -612,18 +641,17 @@ coeficientes = data.frame(coef(modelo2))
 # Replace NA values with 0 in coefficients
 coeficientes[is.na(coeficientes[,1]), 1] <- 0
 
-lambda = NULL
-lambdas = NULL
+lambda = NULL 
+lambdas = NULL 
 iteracao = 20
 for(i in 1:iteracao){
-  # Expectation Step
-  passo.ezao = (as.matrix(covariable.alpha.train) %*% as.matrix(coeficientes[,1]))
-  
-  # Maximization Step
-  variabilidade = matrix(NA, ncol = count_specialist, nrow = count_row * percentual_train)
+  #PASSO E
+  passo.ezao =  (as.matrix(covariable.alpha.train) %*% as.matrix((coeficientes[,1])))
+  #PASSO M
+  variabilidade = matrix (NA, ncol = count_specialist, nrow = count_row*percentual_train)
   for (k in 1:count_specialist) {
-    for (j in 1:(count_row * percentual_train)){
-      variabilidade[j, k] = ((specialist.train[j, k]) - passo.ezao[j])^2
+    for (j in 1:count_row*percentual_train){
+      variabilidade[j,k] = ((specialist.train[j,k]) - passo.ezao[j])^2
     }
   }
   sum.variabilidade = colSums(variabilidade)
@@ -640,6 +668,9 @@ for(i in 1:iteracao){
   w = parte1w %*% parte4w
   coeficientes = w
 }
+
+lambdas = matrix(c(rnorm(count_specialist*total_mse,0,1)), ncol = count_specialist)
+lambdas = t(lambda)
 
 ######################### MODEL COMPARISON #################################
 
@@ -707,17 +738,19 @@ result
 result_1 = result %>% arrange((mean.MSE))
 formattable(result_1)
 
+
+
 lamb_mean = matrix(data = NA, nrow = 1, ncol = count_specialist)
 for(count_specialist in 1:count_specialist){
   lamb_mean[1,count_specialist] = mean(abs(lambdas[,count_specialist]))
 }
 lamb_mean
 
-# Compute weight means for different models
 weights_wear <- data.frame(
-  weight1 = lamb_mean[1,1],
-  weight2 = lamb_mean[1,2],
-  weight3 = lamb_mean[1,3],
-  weight4 = lamb_mean[1,4]
+  weight1 = c(lamb_mean[1,1]),
+  weight2 = c(lamb_mean[1,2]),
+  weight3 = c(lamb_mean[1,3]),
+  weight4 = c(lamb_mean[1,4])
 )
-round(weights_wear, 4)
+
+round(weights_wear,4)
